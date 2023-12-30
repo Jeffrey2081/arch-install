@@ -94,7 +94,7 @@ echo "root:$ROOT_PASSWORD" | chpasswd || exit
 # Create non-root user and add to wheel group
 useradd -m -G wheel $USERNAME || exit
 echo "$USERNAME:$USER_PASSWORD" | chpasswd || exit
-echo "$username ALL=(ALL) ALL" |  tee -a /etc/sudoers
+echo "$USERNAME ALL=(ALL) ALL" |  tee -a /etc/sudoers
 #Configure network
 systemctl enable NetworkManager.service || exit
 systemctl disable dhcpcd.service || exit
