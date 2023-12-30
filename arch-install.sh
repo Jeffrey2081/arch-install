@@ -88,13 +88,13 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf || exit
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB || exit
 grub-mkconfig -o /boot/grub/grub.cfg || exit
 
-# Set root password
+# Set user
 echo "root:$ROOT_PASSWORD" | chpasswd || exit
 
 # Create non-root user and add to wheel group
 useradd -m -G wheel $USERNAME || exit
 echo "$USERNAME:$USER_PASSWORD" | chpasswd || exit
-
+echo "$username ALL=(ALL) ALL" |  tee -a /etc/sudoers
 #Configure network
 systemctl enable NetworkManager.service || exit
 systemctl disable dhcpcd.service || exit
