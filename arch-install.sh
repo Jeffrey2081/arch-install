@@ -13,7 +13,7 @@ read -sp "Enter user password: " USER_PASSWORD
 echo
 read -sp "Enter root password: " ROOT_PASSWORD
 echo
-read -sp "Enter Disk Eg. /dev/sda: " DISK
+read "Enter Disk Eg. /dev/sda: " DISK
 echo
 # Validate user input
 if [[ -z "$HOSTNAME" || -z "$USERNAME" || -z "$USER_PASSWORD" || -z "$ROOT_PASSWORD" ]]; then
