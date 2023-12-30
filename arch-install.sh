@@ -40,7 +40,7 @@ mount -o subvol=@snapshots,compress=zstd /dev/sda2 /mnt/.snapshots
 mount /dev/sda1 /mnt/boot
 
 # Install the base system and KDE packages
-pacstrap /mnt base base-devel linux linux-firmware nano btrfs-progs sddm plasma kde-applications
+pacstrap /mnt base base-devel linux linux-firmware nano btrfs-progs grub efibootmgr
 
 # Generate fstab
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -59,7 +59,6 @@ locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 # Install and configure GRUB
-pacman -S grub efibootmgr
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -81,4 +80,3 @@ EOF
 #reboot into the new system
 sleep 10
 umount -R /mnt
-reboot
