@@ -40,7 +40,7 @@ mount -o subvol=@snapshots,compress=zstd /dev/sda2 /mnt/.snapshots
 mount /dev/sda1 /mnt/boot
 
 # Install the base system and KDE packages
-pacstrap /mnt base base-devel linux linux-firmware nano btrfs-progs grub efibootmgr
+pacstrap /mnt base base-devel linux linux-firmware nano btrfs-progs grub efibootmgr wpa_supplicant wireless_tools networkmanager modemmanager mobile-broadband-provider-info usb_modeswitch rp-pppoe nm-connection-editor network-manager-applet 
 
 # Generate fstab
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -70,6 +70,11 @@ echo "root:$ROOT_PASSWORD" | chpasswd
 useradd -m -G wheel $USERNAME
 echo "$USERNAME:$USER_PASSWORD" | chpasswd
 
+#Configure network
+systemctl enable NetworkManager.service
+systemctl disable dhcpcd.service
+systemctl enable wpa_supplicant.service
+systemctl start NetworkManager.service 
 # Exit chroot 
 exit
 EOF
