@@ -62,9 +62,6 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 
-# Enable and start SDDM
-systemctl enable sddm.service
-systemctl start sddm.service
 
 # Set root password
 echo "root:$ROOT_PASSWORD" | chpasswd
