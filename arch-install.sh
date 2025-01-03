@@ -35,7 +35,7 @@ reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --so
 pacman -Syy --noconfirm || exit 1
 
 # Enable parallel downloads in pacman.conf
-sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
+sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
 
 # Partition and format the disk
 echo "Partitioning $DISK..."
