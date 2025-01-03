@@ -31,7 +31,7 @@ fi
 pacman -S --noconfirm reflector || { echo "Failed to install reflector. Exiting."; exit 1; }
 
 # Update mirrorlist using reflector
-reflector --country India --protocol https --age 12 --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
+reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
 pacman -Syy --noconfirm || exit 1
 
 # Enable parallel downloads in pacman.conf
