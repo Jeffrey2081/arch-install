@@ -27,9 +27,11 @@ if [ ! -b "$DISK" ]; then
   exit 1
 fi
 
-# Configure pacman and update system
-pacman -Sy --noconfirm reflector || exit 1
-reflector --country India --protocol https --age 12 --sort rate --save /etc/pacman.d/mirrorlist || exit 1
+# Ensure reflector is installed and configure pacman
+pacman -S --noconfirm reflector || { echo "Failed to install reflector. Exiting."; exit 1; }
+
+# Update mirrorlist using reflector
+reflector --country India --protocol https --age 12 --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
 pacman -Syy --noconfirm || exit 1
 
 # Enable parallel downloads in pacman.conf
