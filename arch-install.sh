@@ -43,7 +43,7 @@ sgdisk -Z "$DISK" || exit 1
 sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
 sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
 mkfs.fat -F32 "${DISK}1" || exit 1
-mkfs.btrfs "${DISK}2" || exit 1
+mkfs.btrfs "${DISK}2" -f || exit 1
 
 # Mount and create Btrfs subvolumes
 mount "${DISK}2" /mnt || exit 1
