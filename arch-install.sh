@@ -28,7 +28,7 @@ if [ ! -b "$DISK" ]; then
 fi
 
 # Ensure reflector is installed and configure pacman
-pacman -S --noconfirm reflector || { echo "Failed to install reflector. Exiting."; exit 1; }
+pacman -S --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
 
 # Update mirrorlist using reflector
 reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
