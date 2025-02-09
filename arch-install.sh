@@ -12,6 +12,7 @@ read -p "Enter username: " USERNAME
 read -sp "Enter user password: " USER_PASSWORD
 echo
 read -sp "Enter root password: " ROOT_PASSWORD
+echo
 lsblk
 echo
 read -p "Enter Disk (e.g., /dev/sda): " DISK
@@ -28,6 +29,13 @@ if [ ! -b "$DISK" ]; then
   exit 1
 fi
 
+# Detect UEFI or BIOS
+if [ -d "/sys/firmware/efi" ]; then
+  UEFI=true
+else
+  UEFI=false
+fi
+
 # Ensure reflector is installed and configure pacman
 pacman -S --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
 
@@ -39,28 +47,38 @@ pacman -Syy --noconfirm || exit 1
 sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
 
 # Partition and format the disk
-echo "Partitioning $DISK..."
-sgdisk -Z "$DISK" || exit 1
-sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
-sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
-mkfs.fat -F32 "${DISK}1" || exit 1
-mkfs.btrfs "${DISK}2" -f || exit 1
+if [ "$UEFI" = true ]; then
+  echo "Partitioning $DISK for UEFI..."
+  sgdisk -Z "$DISK" || exit 1
+  sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
+  sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
+  mkfs.fat -F32 "${DISK}1" || exit 1
+else
+  echo "Partitioning $DISK for BIOS..."
+  parted "$DISK" mklabel msdos
+  parted "$DISK" mkpart primary ext4 1MiB 100%
+  parted "$DISK" set 1 boot on
+  mkfs.ext4 "${DISK}1"
+fi
 
-# Mount and create Btrfs subvolumes
-mount "${DISK}2" /mnt || exit 1
-for subvol in @ @home @log @pkg @snapshots; do
-  btrfs subvolume create "/mnt/$subvol" || exit 1
-done
-umount /mnt || exit 1
-
-# Mount subvolumes
-mount -o subvol=@,compress=zstd "${DISK}2" /mnt || exit 1
-mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,.snapshots} || exit 1
-mount -o subvol=@home,compress=zstd "${DISK}2" /mnt/home || exit 1
-mount -o subvol=@log,compress=zstd "${DISK}2" /mnt/var/log || exit 1
-mount -o subvol=@pkg,compress=zstd "${DISK}2" /mnt/var/cache/pacman/pkg || exit 1
-mount -o subvol=@snapshots,compress=zstd "${DISK}2" /mnt/.snapshots || exit 1
-mount "${DISK}1" /mnt/boot || exit 1
+# Mount and create Btrfs subvolumes if UEFI
+if [ "$UEFI" = true ]; then
+  mkfs.btrfs "${DISK}2" -f || exit 1
+  mount "${DISK}2" /mnt || exit 1
+  for subvol in @ @home @log @pkg @snapshots; do
+    btrfs subvolume create "/mnt/$subvol" || exit 1
+  done
+  umount /mnt || exit 1
+  mount -o subvol=@,compress=zstd "${DISK}2" /mnt || exit 1
+  mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,.snapshots} || exit 1
+  mount -o subvol=@home,compress=zstd "${DISK}2" /mnt/home || exit 1
+  mount -o subvol=@log,compress=zstd "${DISK}2" /mnt/var/log || exit 1
+  mount -o subvol=@pkg,compress=zstd "${DISK}2" /mnt/var/cache/pacman/pkg || exit 1
+  mount -o subvol=@snapshots,compress=zstd "${DISK}2" /mnt/.snapshots || exit 1
+  mount "${DISK}1" /mnt/boot || exit 1
+else
+  mount "${DISK}1" /mnt || exit 1
+fi
 
 # Install base system and KDE packages
 pacstrap /mnt base base-devel linux linux-firmware nano btrfs-progs grub efibootmgr \
@@ -81,7 +99,11 @@ locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 # Configure GRUB
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+if [ "$UEFI" = true ]; then
+  grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+else
+  grub-install --target=i386-pc "$DISK"
+fi
 grub-mkconfig -o /boot/grub/grub.cfg
 
 # Set root and user passwords
@@ -96,6 +118,6 @@ EOF
 
 # Cleanup and reboot
 umount -R /mnt || exit 1
-echo "Setup complete. Rebooting in 10 seconds..."
-sleep 10
+echo "Setup complete! Press Enter to reboot or Ctrl+C to cancel."
+read
 reboot
