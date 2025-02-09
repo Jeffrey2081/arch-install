@@ -44,7 +44,8 @@ A minimal Arch Linux installer script designed to automate the installation proc
    pacman -Sy pacman-contrib git
    git clone https://github.com/Jeffrey2081/arch-install.git
    cd arch-install
-   ./install.sh
+   chmod +x arch-install.sh
+   ./arch-install.sh
    ```
 ## 🤝 Contributing
 Pull requests and improvements are welcome! Feel free to fork and customize.
