@@ -2,7 +2,7 @@
 
 A minimal Arch Linux installer script designed to automate the installation process with `archinstall`.
 
-<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Arch_Linux_%22Crystal%22_icon.svg/640px-Arch_Linux_%22Crystal%22_icon.svg.png" width="32" height="32" alt="Arch Linux"/>
+<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Arch_Linux_%22Crystal%22_icon.svg/640px-Arch_Linux_%22Crystal%22_icon.svg.png" width="128" height="128" alt="Arch Linux"/>
 
 ## 🚀 Features
 - **⚡ Fully Automated Installation**: Installs Arch Linux with minimal user input.
