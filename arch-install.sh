@@ -12,6 +12,7 @@ read -p "Enter username: " USERNAME
 read -sp "Enter user password: " USER_PASSWORD
 echo
 read -sp "Enter root password: " ROOT_PASSWORD
+lsblk
 echo
 read -p "Enter Disk (e.g., /dev/sda): " DISK
 
