@@ -15,7 +15,7 @@ read -sp "Enter root password: " ROOT_PASSWORD
 echo
 lsblk
 echo
-read -p "Enter Disk (e.g., /dev/sda): " DISK
+read -p "Enter Disk (e.g., /dev/sda or /dev/nvme0n1): " DISK
 
 # Validate user input
 if [[ -z "$HOSTNAME" || -z "$USERNAME" || -z "$USER_PASSWORD" || -z "$ROOT_PASSWORD" || -z "$DISK" ]]; then
@@ -37,11 +37,10 @@ else
 fi
 
 # Ensure reflector is installed and configure pacman
-pacman -S --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
+pacman -Sy --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
 
 # Update mirrorlist using reflector
 reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
-pacman -Syy --noconfirm || exit 1
 
 # Enable parallel downloads in pacman.conf
 sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
@@ -52,32 +51,41 @@ if [ "$UEFI" = true ]; then
   sgdisk -Z "$DISK" || exit 1
   sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
   sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
-  mkfs.fat -F32 "${DISK}1" || exit 1
+  mkfs.fat -F32 "${DISK}p1" || exit 1
 else
   echo "Partitioning $DISK for BIOS..."
-  parted "$DISK" mklabel msdos
-  parted "$DISK" mkpart primary ext4 1MiB 100%
-  parted "$DISK" set 1 boot on
+  parted "$DISK" --script mklabel msdos
+  parted "$DISK" --script mkpart primary ext4 1MiB 100%
+  parted "$DISK" --script set 1 boot on
   mkfs.ext4 "${DISK}1"
+fi
+
+# Determine partition names for mounting
+if [[ "$DISK" == *"nvme"* ]]; then
+  ROOT_PART="${DISK}p2"
+  EFI_PART="${DISK}p1"
+else
+  ROOT_PART="${DISK}2"
+  EFI_PART="${DISK}1"
 fi
 
 # Mount and create Btrfs subvolumes if UEFI
 if [ "$UEFI" = true ]; then
-  mkfs.btrfs "${DISK}2" -f || exit 1
-  mount "${DISK}2" /mnt || exit 1
+  mkfs.btrfs "$ROOT_PART" -f || exit 1
+  mount "$ROOT_PART" /mnt || exit 1
   for subvol in @ @home @log @pkg @snapshots; do
     btrfs subvolume create "/mnt/$subvol" || exit 1
   done
   umount /mnt || exit 1
-  mount -o subvol=@,compress=zstd "${DISK}2" /mnt || exit 1
+  mount -o subvol=@,compress=zstd "$ROOT_PART" /mnt || exit 1
   mkdir -p /mnt/{boot,home,var/log,var/cache/pacman/pkg,.snapshots} || exit 1
-  mount -o subvol=@home,compress=zstd "${DISK}2" /mnt/home || exit 1
-  mount -o subvol=@log,compress=zstd "${DISK}2" /mnt/var/log || exit 1
-  mount -o subvol=@pkg,compress=zstd "${DISK}2" /mnt/var/cache/pacman/pkg || exit 1
-  mount -o subvol=@snapshots,compress=zstd "${DISK}2" /mnt/.snapshots || exit 1
-  mount "${DISK}1" /mnt/boot || exit 1
+  mount -o subvol=@home,compress=zstd "$ROOT_PART" /mnt/home || exit 1
+  mount -o subvol=@log,compress=zstd "$ROOT_PART" /mnt/var/log || exit 1
+  mount -o subvol=@pkg,compress=zstd "$ROOT_PART" /mnt/var/cache/pacman/pkg || exit 1
+  mount -o subvol=@snapshots,compress=zstd "$ROOT_PART" /mnt/.snapshots || exit 1
+  mount "$EFI_PART" /mnt/boot || exit 1
 else
-  mount "${DISK}1" /mnt || exit 1
+  mount "$ROOT_PART" /mnt || exit 1
 fi
 
 # Install base system and KDE packages
