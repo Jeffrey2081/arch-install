@@ -89,7 +89,7 @@ else
 fi
 
 # Install base system and KDE packages
-pacstrap /mnt base base-devel linux linux-firmware nano git wget unzip xorg xorg-server xorg-xinit xorg-xrandr xorg-xsetroot btrfs-progs grub efibootmgr \
+pacstrap /mnt base base-devel linux linux-firmware nano git wget reflector rsync curl python unzip xorg xorg-server xorg-xinit xorg-xrandr xorg-xsetroot btrfs-progs grub efibootmgr \
   wpa_supplicant wireless_tools networkmanager modemmanager mobile-broadband-provider-info \
   usb_modeswitch rp-pppoe nm-connection-editor network-manager-applet || exit 1
 
@@ -98,6 +98,8 @@ genfstab -U /mnt >> /mnt/etc/fstab || exit 1
 
 # Chroot into the new system
 arch-chroot /mnt /bin/bash <<EOF
+reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 
+sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
 # Configure system
 echo "$HOSTNAME" > /etc/hostname
 ln -sf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime
