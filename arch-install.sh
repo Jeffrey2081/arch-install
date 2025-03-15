@@ -6,13 +6,11 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Prompt the user for hostname, username, passwords, and disk
+# Prompt user for hostname, username, passwords, and disk
 read -p "Enter hostname: " HOSTNAME
 read -p "Enter username: " USERNAME
-read -sp "Enter user password: " USER_PASSWORD
-echo
-read -sp "Enter root password: " ROOT_PASSWORD
-echo
+read -sp "Enter user password: " USER_PASSWORD && echo
+read -sp "Enter root password: " ROOT_PASSWORD && echo
 lsblk
 echo
 read -p "Enter Disk (e.g., /dev/sda or /dev/nvme0n1): " DISK
@@ -36,51 +34,56 @@ else
   UEFI=false
 fi
 
-# Ensure reflector is installed and configure pacman
-pacman -Sy --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
+# Ensure reflector and required tools are installed
+pacman -Sy --noconfirm reflector rsync curl python unzip || { echo "Failed to install required packages. Exiting."; exit 1; }
 
 # Update mirrorlist using reflector
-con=$(curl -4 ifconfig.co/country-iso)
-echo -ne "
--------------------------------------------------------------------------
-                    Setting up $con mirrors for faster downloads
--------------------------------------------------------------------------
-"
-reflector --verbose -c "$con" -l 5 --sort rate --save /etc/pacman.d/mirrorlist
-# Enable parallel downloads in pacman.conf
+COUNTRY=$(curl -4 ifconfig.co/country-iso)
+echo -ne "Setting up mirrors for faster downloads in $COUNTRY...\n"
+reflector --verbose -c "$COUNTRY" -l 5 --sort rate --save /etc/pacman.d/mirrorlist
 sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
 
 # Partition and format the disk
+echo "Partitioning $DISK..."
+sgdisk -Z "$DISK" || exit 1  # Wipe existing partitions
+
 if [ "$UEFI" = true ]; then
-  echo "Partitioning $DISK for UEFI..."
-  sgdisk -Z "$DISK" || exit 1
   sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
   sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
   mkfs.fat -F32 "${DISK}p1" || exit 1
 else
-  echo "Partitioning $DISK for BIOS..."
   parted "$DISK" --script mklabel msdos
   parted "$DISK" --script mkpart primary ext4 1MiB 100%
   parted "$DISK" --script set 1 boot on
-  mkfs.ext4 "${DISK}1"
 fi
 
-# Determine partition names dynamically
-ROOT_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0x8300" {print $1}')
-EFI_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0xef00" {print $1}')
-
-# Fallback if detection fails
-if [[ -z "$ROOT_PART" || -z "$EFI_PART" ]]; then
-  if [[ "$DISK" == *"nvme"* ]]; then
-    ROOT_PART="${DISK}p2"
-    EFI_PART="${DISK}p1"
-  else
-    ROOT_PART="${DISK}2"
-    EFI_PART="${DISK}1"
-  fi
+# Dynamic partition detection
+if [[ "$UEFI" = true ]]; then
+    EFI_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0xef00" {print $1}')
+    ROOT_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0x8300" {print $1}')
+else
+    ROOT_PART=$(lsblk -lnpo NAME "$DISK" | tail -n 1)  # Assume last partition is root
 fi
 
-# Mount and create Btrfs subvolumes if UEFI
+# Fallback for partition names
+if [[ -z "$ROOT_PART" || ( "$UEFI" = true && -z "$EFI_PART" ) ]]; then
+    if [[ "$DISK" =~ "nvme" ]]; then
+        ROOT_PART="${DISK}p2"
+        EFI_PART="${DISK}p1"
+    else
+        ROOT_PART="${DISK}2"
+        EFI_PART="${DISK}1"
+    fi
+fi
+
+# Verify partitions exist
+if [[ ! -b "$ROOT_PART" || ( "$UEFI" = true && ! -b "$EFI_PART" ) ]]; then
+    echo "Error: Detected partitions do not exist!"
+    lsblk
+    exit 1
+fi
+
+# Format and mount the partitions
 if [ "$UEFI" = true ]; then
   mkfs.btrfs "$ROOT_PART" -f || exit 1
   mount "$ROOT_PART" /mnt || exit 1
@@ -96,10 +99,11 @@ if [ "$UEFI" = true ]; then
   mount -o subvol=@snapshots,compress=zstd "$ROOT_PART" /mnt/.snapshots || exit 1
   mount "$EFI_PART" /mnt/boot || exit 1
 else
+  mkfs.ext4 "$ROOT_PART"
   mount "$ROOT_PART" /mnt || exit 1
 fi
 
-# Install base system and KDE packages
+# Install base system
 pacstrap /mnt base base-devel linux linux-firmware nano git wget reflector rsync curl python unzip xorg xorg-server xorg-xinit xorg-xrandr xorg-xsetroot btrfs-progs grub efibootmgr \
   wpa_supplicant wireless_tools networkmanager modemmanager mobile-broadband-provider-info \
   usb_modeswitch rp-pppoe nm-connection-editor network-manager-applet || exit 1
@@ -109,9 +113,10 @@ genfstab -U /mnt >> /mnt/etc/fstab || exit 1
 
 # Chroot into the new system
 arch-chroot /mnt /bin/bash <<EOF
-coun=$(curl -4 ifconfig.co/country-iso)
-reflector --country $coun --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 
+COUNTRY=\$(curl -4 ifconfig.co/country-iso)
+reflector --country \$COUNTRY --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist
 sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
+
 # Configure system
 echo "$HOSTNAME" > /etc/hostname
 ln -sf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime
