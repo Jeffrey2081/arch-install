@@ -1,12 +1,12 @@
 #!/bin/bash
 
-# Check if script is run as root
+# Ensure script is run as root
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
   exit 1
 fi
 
-# Prompt user for input
+# Get user input
 read -p "Enter hostname: " HOSTNAME
 read -p "Enter username: " USERNAME
 read -sp "Enter user password: " USER_PASSWORD && echo
@@ -34,34 +34,38 @@ else
   UEFI=false
 fi
 
-# Install necessary tools
-pacman -Sy --noconfirm reflector rsync curl python unzip || { echo "Failed to install required packages. Exiting."; exit 1; }
+# Unmount any existing partitions on the disk
+echo "Unmounting existing partitions on $DISK..."
+mountpoints=$(lsblk -nr -o MOUNTPOINT "$DISK" | grep -v '^$')
+if [ -n "$mountpoints" ]; then
+  for mount in $mountpoints; do
+    echo "Unmounting $mount..."
+    umount -l "$mount" || { echo "Failed to unmount $mount"; exit 1; }
+  done
+fi
 
-# Update mirrorlist
-COUNTRY=$(curl -4 ifconfig.co/country-iso)
-echo "Setting up mirrors for $COUNTRY..."
-reflector --verbose -c "$COUNTRY" -l 5 --sort rate --save /etc/pacman.d/mirrorlist
-sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
+# Wipe existing partitions
+echo "Wiping $DISK..."
+sgdisk -Z "$DISK" || exit 1  
 
 # Partition the disk
-echo "Partitioning $DISK..."
-sgdisk -Z "$DISK" || exit 1  # Wipe existing partitions
-
 if [ "$UEFI" = true ]; then
+  echo "Partitioning $DISK for UEFI..."
   sgdisk -n 1:0:+512M -t 1:ef00 -c 1:"EFI System Partition" "$DISK" || exit 1
   sgdisk -n 2:0:0 -t 2:8300 -c 2:"Arch Linux" "$DISK" || exit 1
   mkfs.fat -F32 "${DISK}1" || exit 1
 else
+  echo "Partitioning $DISK for BIOS..."
   parted "$DISK" --script mklabel msdos
   parted "$DISK" --script mkpart primary ext4 1MiB 100%
   parted "$DISK" --script set 1 boot on
 fi
 
-# Find partition names dynamically
+# Detect correct partition names dynamically
 ROOT_PART=$(lsblk -lnp -o NAME,PARTLABEL "$DISK" | awk '$2 == "Arch Linux" {print $1}')
 EFI_PART=$(lsblk -lnp -o NAME,PARTLABEL "$DISK" | awk '$2 == "EFI System Partition" {print $1}')
 
-# Fallback for partition names
+# Fallback if labels were not created
 if [[ -z "$ROOT_PART" || ( "$UEFI" = true && -z "$EFI_PART" ) ]]; then
     if [[ "$DISK" =~ "nvme" ]]; then
         ROOT_PART="${DISK}p2"
@@ -79,7 +83,7 @@ if [[ ! -b "$ROOT_PART" || ( "$UEFI" = true && ! -b "$EFI_PART" ) ]]; then
     exit 1
 fi
 
-# Format & mount partitions
+# Format and mount partitions
 if [ "$UEFI" = true ]; then
   mkfs.btrfs "$ROOT_PART" -f || exit 1
   mount "$ROOT_PART" /mnt || exit 1
@@ -99,7 +103,7 @@ else
   mount "$ROOT_PART" /mnt || exit 1
 fi
 
-# Install Arch Linux base system
+# Install Arch Linux
 pacstrap /mnt base base-devel linux linux-firmware nano git wget reflector rsync curl python unzip xorg xorg-server xorg-xinit xorg-xrandr xorg-xsetroot btrfs-progs grub efibootmgr \
   wpa_supplicant wireless_tools networkmanager modemmanager mobile-broadband-provider-info \
   usb_modeswitch rp-pppoe nm-connection-editor network-manager-applet || exit 1
