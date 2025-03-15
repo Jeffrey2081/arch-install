@@ -40,10 +40,15 @@ fi
 pacman -Sy --noconfirm reflector rsync curl python || { echo "Failed to install reflector. Exiting."; exit 1; }
 
 # Update mirrorlist using reflector
-reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist || { echo "Failed to update mirrors."; exit 1; }
-
+con=$(curl -4 ifconfig.co/country-iso)
+echo -ne "
+-------------------------------------------------------------------------
+                    Setting up $con mirrors for faster downloads
+-------------------------------------------------------------------------
+"
+reflector --verbose -c "$con" -l 5 --sort rate --save /etc/pacman.d/mirrorlist
 # Enable parallel downloads in pacman.conf
-sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
+sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
 
 # Partition and format the disk
 if [ "$UEFI" = true ]; then
@@ -98,8 +103,9 @@ genfstab -U /mnt >> /mnt/etc/fstab || exit 1
 
 # Chroot into the new system
 arch-chroot /mnt /bin/bash <<EOF
-reflector --country 'India' --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 
-sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 10/' /etc/pacman.conf || exit 1
+coun=$(curl -4 ifconfig.co/country-iso)
+reflector --country $coun --latest 5 --age 2 --fastest 5 --protocol https --sort rate --save /etc/pacman.d/mirrorlist 
+sed -i 's/#ParallelDownloads = 5/ParallelDownloads = 5/' /etc/pacman.conf || exit 1
 # Configure system
 echo "$HOSTNAME" > /etc/hostname
 ln -sf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime
