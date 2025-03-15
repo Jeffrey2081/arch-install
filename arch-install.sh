@@ -65,13 +65,19 @@ else
   mkfs.ext4 "${DISK}1"
 fi
 
-# Determine partition names for mounting
-if [[ "$DISK" == "nvme"* ]]; then
-  ROOT_PART="${DISK}p2"
-  EFI_PART="${DISK}p1"
-else
-  ROOT_PART="${DISK}2"
-  EFI_PART="${DISK}1"
+# Determine partition names dynamically
+ROOT_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0x8300" {print $1}')
+EFI_PART=$(lsblk -lnpo NAME,PARTTYPE "$DISK" | awk '$2 == "0xef00" {print $1}')
+
+# Fallback if detection fails
+if [[ -z "$ROOT_PART" || -z "$EFI_PART" ]]; then
+  if [[ "$DISK" == *"nvme"* ]]; then
+    ROOT_PART="${DISK}p2"
+    EFI_PART="${DISK}p1"
+  else
+    ROOT_PART="${DISK}2"
+    EFI_PART="${DISK}1"
+  fi
 fi
 
 # Mount and create Btrfs subvolumes if UEFI
