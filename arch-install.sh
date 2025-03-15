@@ -66,7 +66,7 @@ else
 fi
 
 # Determine partition names for mounting
-if [[ "$DISK" == *"nvme"* ]]; then
+if [[ "$DISK" == "nvme"* ]]; then
   ROOT_PART="${DISK}p2"
   EFI_PART="${DISK}p1"
 else
